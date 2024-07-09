@@ -1,11 +1,40 @@
 ---
 # tasks file for postgres
 
+# - name: Show ansible_distribution_major_version
+#   ansible.builtin.debug:
+#     var: ansible_distribution_major_version
+#   run_once: true
+#   delegate_to: localhost
+
+# - name: Show _postgres_version
+#   ansible.builtin.debug:
+#     var: _postgres_version[ansible_os_family][ansible_distribution_major_version]
+#   run_once: true
+#   delegate_to: localhost
+
+# - name: Show postgres_install_version
+#   ansible.builtin.debug:
+#     var: postgres_install_version
+#   run_once: true
+#   delegate_to: localhost
+
 - name: Import assert.yml
   ansible.builtin.import_tasks:
     file: assert.yml
   run_once: true
   delegate_to: localhost
+
+- name: Enable postgres module
+  ansible.builtin.dnf:
+    name: "@postgresql:{{ postgres_install_version }}/server"
+    state: present
+  # notify:
+  #   - Systemctl daemon-reexec
+  when:
+    ansible_os_family == "RedHat" and
+    ansible_distribution_major_version | int > 7 and
+    postgres_install_version | int != postgres_version | int
 
 - name: Install postgres
   ansible.builtin.package:
@@ -34,49 +63,15 @@
 - name: Configure postgres
   ansible.builtin.lineinfile:
     path: "{{ postgres_conf_dir }}/postgresql.conf"
-    regex: "^{{ item.name }} ="
-    line: "{{ item.name }} = '{{ item.value }}'"
+    regex: "^{{ item.value.name | default(item.key) }} ="
+    line: "{{ item.value.name | default(item.key) }} = {{ item.value.value | default(item.value) }}"
     create: true
     mode: "0644"
   notify:
     - Restart postgres
-  loop:
-    - name: Port
-      value: "{{ postgres_port }}"
-    - name: Listen_addresses
-      value: "{{ postgres_listen_addresses }}"
-    - name: Unix_socket_directories
-      value: "{{ postgres_socket_directory }}"
-    - name: Log_timezone
-      value: "{{ postgres_log_timezone }}"
-    - name: Datestyle
-      value: "{{ postgres_datestyle }}"
-    - name: Timezone
-      value: "{{ postgres_timezone }}"
-    - name: Default_text_search_config
-      value: "{{ postgres_default_text_search_config }}"
+  loop: "{{ postgres_config_entries | default({}) | dict2items }}"
   loop_control:
-    label: "{{ item.name }}"
-
-- name: Configure wal parameters
-  ansible.builtin.lineinfile:
-    path: "{{ postgres_conf_dir }}/postgresql.conf"
-    regex: "^{{ item.name }} ="
-    line: "{{ item.name }} = '{{ item.value }}'"
-    create: true
-    mode: "0644"
-  notify:
-    - Restart postgres
-  loop:
-    - name: Max_wal_size
-      value: "{{ postgres_max_wal_size }}"
-    - name: Min_wal_size
-      value: "{{ postgres_min_wal_size }}"
-  loop_control:
-    label: "{{ item.name }}"
-  when:
-    - ansible_os_family not in [ "RedHat", "Rocky" ]
-    - ansible_distribution_major_version != "7"
+    label: "{{ item.value.name | default(item.key) }}"
 
 - name: Create pg_hba.conf
   ansible.builtin.template:
@@ -96,14 +91,23 @@
     state: started
     enabled: true
 
-- name: Install psycopg2-binary
-  ansible.builtin.pip:
-    name: psycopg2-binary
+- name: Install python3-psycopg2
+  ansible.builtin.package:
+    name: python3-psycopg2
     state: present
   when:
     - postgres_databases is defined or
       postgres_users is defined
-    - ansible_os_family != "Debian"
+    - ansible_os_family == "RedHat"
+
+# - name: Install psycopg2-binary
+#   ansible.builtin.pip:
+#     name: psycopg2-binary
+#     state: present
+#   when:
+#     - postgres_databases is defined or
+#       postgres_users is defined
+#     - ansible_os_family != "Debian"
 
 - name: Flush handlers again
   ansible.builtin.meta: flush_handlers
@@ -132,6 +136,7 @@
     password: "{{ item.password }}"
     expires: "{{ item.expires | default(omit) }}"
     port: "{{ postgres_port }}"
+    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}"
   loop: "{{ postgres_users }}"
   loop_control:
     label: "{{ item.name }}"

@@ -1,6 +1,9 @@
 ---
 # defaults file for postgres
 
+# Define version to install
+postgres_install_version: "{{ postgres_version }}"
+
 # The port to listen to.
 postgres_port: 5432
 
@@ -13,6 +16,35 @@ postgres_log_timezone: UTC
 postgres_datestyle: iso, ymd
 postgres_timezone: UTC
 postgres_default_text_search_config: pg_catalog.english
+
+postgres_config_entries:
+  port:
+    name: port
+    value: "{{ postgres_port }}"
+  listen_addresses:
+    name: listen_addresses
+    value: "'{{ postgres_listen_addresses }}'"
+  unix_socket_directories:
+    name: unix_socket_directories
+    value: "'{{ postgres_socket_directory }}'"
+  log_timezone:
+    name: log_timezone
+    value: "{{ postgres_log_timezone }}"
+  datestyle:
+    name: datestyle
+    value: "'{{ postgres_datestyle }}'"
+  timezone:
+    name: timezone
+    value: "{{ postgres_timezone }}"
+  default_text_search_config:
+    name: default_text_search_config
+    value: "'{{ postgres_default_text_search_config }}'"
+  max_wal_size:
+    name: max_wal_size
+    value: "{{ postgres_max_wal_size }}"
+  min_wal_size:
+    name: min_wal_size
+    value: "{{ postgres_min_wal_size }}"
 
 postgres_hba_entries:
   - type: local

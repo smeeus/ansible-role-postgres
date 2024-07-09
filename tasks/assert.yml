@@ -1,5 +1,14 @@
 ---
 
+- name: assert | Test postgres_install_version
+  ansible.builtin.assert:
+    that:
+      - postgres_install_version is defined
+      - postgres_install_version | int is number
+      - postgres_install_version | int >= 9
+      - postgres_install_version | int <= 16
+    quiet: true
+
 - name: assert | Test postgres_port
   ansible.builtin.assert:
     that:
